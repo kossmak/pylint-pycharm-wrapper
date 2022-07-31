@@ -1,0 +1,207 @@
+#!/bin/bash
+
+##############################################################################################
+#
+# Run project-specified pylint with PyCharm-friendly output
+#
+##############################################################################################
+
+set -o nounset
+set -o errexit
+set -o pipefail
+
+# set -o xtrace
+
+# define command line args
+parseopts() {
+
+    while getopts "hdep:r:" optname
+        do
+            case "$optname" in
+                "h")
+                    # print help and exit
+                    echo "
+Usage: $0  PYLINT_PYCHARM_PATH   TARGET   -p PYTHON [options]
+$0 -h
+
+    Run project-specified pylint with PyCharm-friendly output
+
+    Arguments:
+
+        PYLINT_PYCHARM_PATH  - location of `pylint-pycharm` executed file
+
+        TARGET               - location of target python module to analyze
+
+
+    Options:
+
+        -h                   - print this help
+
+        -d                   - debug mode with verbose logging
+
+        -e                   - extract virtualenv path from PYTHON location
+
+        -p PYTHON            - interpreter location
+
+        -r REPORTS_MODE      - pylint end-reports mode 
+
+
+    Example:
+
+        $0 \$HOME/bin/pylint-pycharm proj/my-py-app/daemon.py -p \$HOME/.venv/my-py-app/bin/python --reports=n
+
+";
+                    exit 0;
+                    ;;
+                "d")
+                    # debug mode on
+                    echo "Option $optname is on"
+                    DEBUG_MODE=1
+                    ;;
+                "e")
+                    # extract virtualenv path from PYTHON location
+                    echo "Option $optname is on"
+                    EXTRACT_VENV=1
+                    ;;
+                "p")
+                    # python interpreter specification
+                    echo "Option $optname has value $OPTARG"
+                    PYTHON=$OPTARG
+                    ;;
+                "r")
+                    # pylint end-reports mode
+                    echo "Option $optname has value $OPTARG"
+                    REPORTS_MODE=$OPTARG
+                    ;;
+                "?")
+                    echo "Unknown option $OPTARG"
+                    exit 2
+                    ;;
+                ":")
+                    echo "No argument value for option $OPTARG"
+                    exit 3
+                    ;;
+                *)
+                    echo "Unknown error while processing options"
+                    exit 4
+                    ;;
+               esac
+          done
+
+     return
+}
+
+# parse CLI options
+
+PYLINT_PYCHARM_PATH=$1
+TARGET=$2
+
+parseopts "${@:3}"
+
+
+# init debug mode from cli-args
+if [[ $DEBUG_MODE  -eq 1 ]] ; then
+
+    debug_log() {
+        echo
+        echo $1
+        echo
+    }
+
+else
+
+    debug_log() {
+        return
+    }
+    echo "DEBUG_MODE is off"
+    
+fi
+
+# Options validating
+
+# Does executable interpreter exists?
+if [ -h "${PYTHON}" ] || [ -e "${PYTHON}" ] ; then
+    debug_log "PYTHON: ${PYTHON}";
+else
+    echo "ERROR: python interpreter ${PYTHON} cannot be executed";
+    exit 401
+fi
+
+# Does executable `pylint-pycharm` exists?
+if [[ -e "${PYLINT_PYCHARM_PATH}" ]] ; then
+    debug_log "PYLINT_PYCHARM_PATH: ${PYLINT_PYCHARM_PATH}";
+else
+    echo "ERROR: ${PYLINT_PYCHARM_PATH} cannot be executed";
+    exit 403
+fi
+
+# Does target unit exist?
+if [[ -e "${TARGET}" ]] ; then
+    debug_log "TARGET: ${TARGET}";
+else
+    echo "ERROR: python unit ${TARGET} not found";
+    exit 404
+fi
+
+# # test python interpreter import pylint_pycharm
+# is_pylint_pycharm_installed() {
+#     exec "${PYTHON} -c 'import pylint_pycharm'"
+#     local result=$?
+#     return $result
+# }
+#
+# is_pylint_pycharm_installed
+# # result=$?
+# # if [[ $result -ne 0 ]]; then
+# if [[ $? -ne 0 ]]; then
+#     echo "ERROR: package pylint_pycharm is not installed"
+#     exit 501
+#     # FIXME: install from "-r" option
+# fi
+
+
+CMD_LINE="${PYTHON} ${PYLINT_PYCHARM_PATH} ${TARGET}"
+
+# init virtualenv
+if [[ $EXTRACT_VENV -eq 1 ]] ; then
+
+    VENV_KEY="--virtualenv=${PYTHON%/*}/../"
+    debug_log "VENV_KEY: ${VENV_KEY}"
+
+    # export PYTHONPATH=$1:$HOME/proj/ramax/sb-lib:$HOME/proj/ramax/afl_cabinet-lib:$HOME/proj/ramax/pyramid-lib:$HOME/.venv/afl27/lib/python2.7/site-packages:/usr/lib/python2.7/dist-packages
+    # export PYTHONPATH=$1:$HOME/proj/ramax/sb-lib:$HOME/proj/ramax/afl_cabinet-lib:$HOME/proj/ramax/pyramid-lib:$HOME/.virtualenvs/vocabs/lib/python2.7/site-packages:/usr/lib/python2.7/dist-packages
+
+    CMD_LINE="${CMD_LINE} ${VENV_KEY}"
+
+fi
+
+
+# init reports mode
+if [[ -n $REPORTS_MODE ]] ; then
+
+    REPORTS_KEY="--reports=${REPORTS_MODE}"
+    debug_log "REPORTS_KEY: ${REPORTS_KEY}"
+
+    CMD_LINE="${CMD_LINE} ${REPORTS_KEY}"
+
+fi
+# debug-log PYTHONPATH
+# 
+# debug-log `which pylint-pycharm-wrapper`
+# debug-log `which pylint-pycharm`
+
+
+
+echo ''
+# debug_log "LOGGED from $(pwd)/pylint-pycharm-wrapper"
+echo "LOGGED from $(pwd)/pylint-pycharm-wrapper"
+echo ''
+
+# echo "args: $@
+# echo "args: ${@:2}
+# PYTHONPATH: $PYTHONPATH
+# "
+
+#pylint-pycharm ${@:2}
+exec ${CMD_LINE}
+# echo ${CMD_LINE}
